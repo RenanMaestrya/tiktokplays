@@ -99,6 +99,58 @@ async function comprarUpgrade(nomeUpgrade) {
     }
 }
 
+// Função para processar gifts
+async function processarGift(giftId) {
+    try {
+        // Mapeamento de gifts para ações
+        const giftActions = {
+            '1': { // Rose (presente comum)
+                clicks: 10,
+                message: 'Obrigado pelo Rose! 10 cliques no cookie!'
+            },
+            '2': { // Lion (presente médio)
+                clicks: 50,
+                upgrade: 'up1',
+                message: 'Obrigado pelo Lion! 50 cliques e um upgrade!'
+            },
+            '3': { // Universe (presente caro)
+                clicks: 100,
+                upgrade: 'up2',
+                product: 'Cursor',
+                message: 'Obrigado pelo Universe! 100 cliques, upgrade e produto!'
+            }
+            // Adicione mais gifts conforme necessário
+        };
+
+        const action = giftActions[giftId];
+        
+        if (action) {
+            // Executa os cliques
+            if (action.clicks) {
+                await clicarCookie(action.clicks);
+            }
+            
+            // Compra upgrade se especificado
+            if (action.upgrade) {
+                await comprarUpgrade(action.upgrade);
+            }
+            
+            // Compra produto se especificado
+            if (action.product) {
+                await comprarUpgrade(action.product);
+            }
+            
+            console.log(action.message);
+        } else {
+            // Ação padrão para gifts não mapeados
+            await clicarCookie(5);
+            console.log('Obrigado pelo presente! 5 cliques no cookie!');
+        }
+    } catch (err) {
+        console.error('Erro ao processar gift:', err);
+    }
+}
+
 // Função para configurar os eventos da live
 function configurarEventos() {
     // Quando um espectador enviar uma curtida
@@ -111,6 +163,12 @@ function configurarEventos() {
     tiktokLiveConnection.on('chat', data => {
         console.log(`${data.uniqueId}: ${data.comment}`);
         comprarUpgrade(data.comment);
+    });
+
+    // Quando um espectador enviar um presente
+    tiktokLiveConnection.on('gift', data => {
+        console.log(`${data.uniqueId} enviou o presente ${data.giftId}`);
+        processarGift(data.giftId);
     });
 
     // Evento de desconexão
