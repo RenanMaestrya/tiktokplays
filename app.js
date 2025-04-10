@@ -1,41 +1,61 @@
 const { WebcastPushConnection } = require('tiktok-live-connector');
 const robot = require("robotjs");
 
-const tiktokUsername = 'animes.aleator1os';
-const tiktokLiveConnection = new WebcastPushConnection(tiktokUsername);
+const tiktokUsername = 'maesttrya';
+let tiktokLiveConnection = null;
+let tentativasReconexao = 0;
+const MAX_TENTATIVAS = 5;
+const INTERVALO_RECONEXAO = 30000; // 30 segundos
 
-// Função para capturar cliques do mouse
-function capturarClique() {
-    console.log('Clique em qualquer lugar da tela para ver as coordenadas...');
-    robot.setMouseDelay(0);
-    
-    // Captura a posição do mouse quando o botão esquerdo é pressionado
-    robot.mouseToggle("down", "left");
-    const posicao = robot.getMousePos();
-    console.log(`Você clicou em: X:${posicao.x}, Y:${posicao.y}`);
-    robot.mouseToggle("up", "left");
+
+
+// Função para conectar à live
+async function conectarLive() {
+    try {
+        tiktokLiveConnection = new WebcastPushConnection(tiktokUsername);
+        
+        const state = await tiktokLiveConnection.connect();
+        console.log(`Conectado à sala com ID ${state.roomId}`);
+        tentativasReconexao = 0; // Reseta o contador de tentativas
+        
+        // Configura os eventos após conexão bem-sucedida
+        configurarEventos();
+        
+    } catch (err) {
+        console.error('Falha ao conectar:', err.message);
+        
+        if (tentativasReconexao < MAX_TENTATIVAS) {
+            tentativasReconexao++;
+            console.log(`Tentando reconectar em ${INTERVALO_RECONEXAO/1000} segundos... (Tentativa ${tentativasReconexao}/${MAX_TENTATIVAS})`);
+            setTimeout(conectarLive, INTERVALO_RECONEXAO);
+        } else {
+            console.log('Número máximo de tentativas atingido. Verifique se a live está online.');
+        }
+    }
 }
 
-// Conecta na live
-tiktokLiveConnection.connect().then(state => {
-    console.log(`Conectado à sala com ID ${state.roomId}`);
-    capturarClique(); // Inicia a captura de cliques
-}).catch(err => {
-    console.error('Falha ao conectar', err);
-});
+// Função para configurar os eventos da live
+function configurarEventos() {
+    // Quando um espectador enviar uma curtida
+    tiktokLiveConnection.on('like', data => {
+        console.log(`${data.uniqueId} deixou ${data.likeCount} likes`);
 
-// Quando um espectador enviar uma curtida
-tiktokLiveConnection.on('like', data => {
-    console.log(`${data.uniqueId} deixou ${data.likeCount} likes`);
+        for (let i = 0; i < data.likeCount; i++) {
+            robot.moveMouse(180, 420);
+            robot.mouseClick();
+        }
+    });
 
-    // Clica uma vez na posição X:150, Y:400 (ajuste se necessário)
-    for (let i = 0; i < data.likeCount; i++) {
-        const mousePos = robot.getMousePos();
-        console.log(`Posição do mouse: X:${mousePos.x}, Y:${mousePos.y}`);
-        robot.moveMouse(180, 420);
-        robot.mouseClick();
-    }
-});
+    // Evento de desconexão
+    tiktokLiveConnection.on('disconnected', () => {
+        console.log('Desconectado da live. Tentando reconectar...');
+        conectarLive();
+    });
+}
+
+// Inicia a conexão
+console.log('Iniciando conexão com a live...');
+conectarLive();
 
 // Quando um espectador enviar um presente
 // tiktokLiveConnection.on('gift', data => {
