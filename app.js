@@ -1,7 +1,7 @@
 const { WebcastPushConnection } = require('tiktok-live-connector');
 const puppeteer = require('puppeteer');
 
-const tiktokUsername = 'emersoncglobal';
+const tiktokUsername = 'maesttrya';
 let tiktokLiveConnection = null;
 let tentativasReconexao = 0;
 const MAX_TENTATIVAS = 5;
