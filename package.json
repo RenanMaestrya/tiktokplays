@@ -10,7 +10,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "robotjs": "^0.6.0",
+    "puppeteer": "^24.6.1",
     "tiktok-live-connector": "^1.2.3"
   }
 }
