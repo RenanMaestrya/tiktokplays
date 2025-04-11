@@ -73,6 +73,19 @@ async function controlarLoja(acao) {
                 }
             }, PIXELS_POR_MOVIMENTO);
             console.log(`Loja movida ${PIXELS_POR_MOVIMENTO} pixels para cima`);
+        } else if (acao === 'topo') {
+            await page.evaluate(() => {
+                const sectionRight = document.getElementById('sectionRight');
+                const store = document.getElementById('store');
+                if (sectionRight && store) {
+                    // Calcula a posição do início do store em relação ao sectionRight
+                    const storeRect = store.getBoundingClientRect();
+                    const sectionRect = sectionRight.getBoundingClientRect();
+                    const scrollPosition = storeRect.top - sectionRect.top + sectionRight.scrollTop;
+                    sectionRight.scrollTop = scrollPosition;
+                }
+            });
+            console.log('Loja movida para o topo');
         }
     } catch (err) {
         console.error('Erro ao controlar loja:', err);
@@ -94,6 +107,8 @@ function configurarEventos() {
             controlarLoja('baixo');
         } else if (data.comment.toLowerCase() === 'loja cima') {
             controlarLoja('cima');
+        } else if (data.comment.toLowerCase() === 'loja topo') {
+            controlarLoja('topo');
         } else {
             cookieService.comprarUpgrade(data.comment);
         }
