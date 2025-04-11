@@ -11,10 +11,25 @@ class MusicService {
         this.player = null;
         this.playNextTimeout = null;
         this.platform = os.platform();
+        this.vlcPath = 'C:\\Program Files\\VideoLAN\\VLC\\vlc.exe';
     }
 
     async initialize() {
         try {
+            // Verifica se o VLC está instalado no Windows
+            if (this.platform === 'win32') {
+                if (!fs.existsSync(this.vlcPath)) {
+                    console.error('\n=== ATENÇÃO ===');
+                    console.error('VLC Media Player não encontrado!');
+                    console.error('Para que a música funcione no Windows, você precisa:');
+                    console.error('1. Baixar e instalar o VLC Media Player: https://www.videolan.org/vlc/');
+                    console.error('2. Instalar na pasta padrão: C:\\Program Files\\VideoLAN\\VLC');
+                    console.error('3. Reiniciar o aplicativo após a instalação');
+                    console.error('================\n');
+                    return;
+                }
+            }
+
             const soundsDir = path.join(__dirname, '../../../sounds');
             this.musicFiles = fs.readdirSync(soundsDir)
                 .filter(file => file.endsWith('.mp3'))
@@ -60,7 +75,8 @@ class MusicService {
         if (this.platform === 'darwin') { // macOS
             command = `afplay -v 0.3 "${musicFile}"`;
         } else if (this.platform === 'win32') { // Windows
-            command = `powershell -c (New-Object Media.SoundPlayer).PlaySync()`;
+            // Usa o VLC com volume em 30% e modo headless
+            command = `"${this.vlcPath}" "${musicFile}" --volume 30 --play-and-exit --qt-start-minimized`;
         } else {
             console.error('Sistema operacional não suportado');
             return;
