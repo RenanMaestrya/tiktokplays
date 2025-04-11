@@ -250,11 +250,22 @@ async function inicializarNavegador() {
             const saveData = fs.readFileSync(`backups/${ultimoBackup}`, 'utf8');
             
             try {
-                await page.click('.subButton');
-                await page.waitForSelector('.option.smallFancyButton', { visible: true });
-                await page.click('a.option.smallFancyButton[onclick*="ImportSave"]');
-                await page.waitForSelector('#textareaPrompt', { visible: true });
+                // Espera a página estar completamente carregada
+                await page.waitForSelector('.subButton', { visible: true, timeout: 10000 });
                 
+                // Clica no botão de opções
+                await page.click('.subButton');
+                
+                // Espera o menu de opções aparecer
+                await page.waitForSelector('.option.smallFancyButton', { visible: true, timeout: 5000 });
+                
+                // Clica no botão de importar
+                await page.click('a.option.smallFancyButton[onclick*="ImportSave"]');
+                
+                // Espera o textarea aparecer
+                await page.waitForSelector('#textareaPrompt', { visible: true, timeout: 5000 });
+                
+                // Insere os dados do backup
                 await page.evaluate((data) => {
                     const textarea = document.querySelector('#textareaPrompt');
                     if (textarea) {
@@ -263,10 +274,19 @@ async function inicializarNavegador() {
                     }
                 }, saveData);
                 
+                // Espera o botão de confirmação aparecer
+                await page.waitForSelector('#promptOption0', { visible: true, timeout: 5000 });
+                
+                // Clica no botão de confirmação
                 await page.click('#promptOption0');
+                
+                // Espera um pouco para garantir que o salvamento foi carregado
+                await delay(2000);
+                
                 console.log('Backup carregado com sucesso!');
             } catch (err) {
                 console.error('Erro ao carregar backup:', err);
+                console.log('Iniciando novo jogo...');
             }
         } else {
             console.log('Nenhum backup encontrado. Iniciando novo jogo.');
