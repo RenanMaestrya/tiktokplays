@@ -57,17 +57,27 @@ async function controlarLoja(acao) {
 
         if (acao === 'baixo') {
             await page.evaluate(() => {
+                const sectionRight = document.getElementById('sectionRight');
                 const store = document.getElementById('store');
-                if (store) {
-                    store.scrollTop = store.scrollHeight;
+                if (sectionRight && store) {
+                    // Calcula a posição do store em relação ao sectionRight
+                    const storeRect = store.getBoundingClientRect();
+                    const sectionRect = sectionRight.getBoundingClientRect();
+                    const scrollPosition = storeRect.top - sectionRect.top + sectionRight.scrollTop;
+                    sectionRight.scrollTop = scrollPosition;
                 }
             });
             console.log('Loja movida para baixo');
         } else if (acao === 'cima') {
             await page.evaluate(() => {
+                const sectionRight = document.getElementById('sectionRight');
                 const store = document.getElementById('store');
-                if (store) {
-                    store.scrollTop = 0;
+                if (sectionRight && store) {
+                    // Calcula a posição do início do store em relação ao sectionRight
+                    const storeRect = store.getBoundingClientRect();
+                    const sectionRect = sectionRight.getBoundingClientRect();
+                    const scrollPosition = storeRect.top - sectionRect.top + sectionRight.scrollTop;
+                    sectionRight.scrollTop = scrollPosition;
                 }
             });
             console.log('Loja movida para cima');
