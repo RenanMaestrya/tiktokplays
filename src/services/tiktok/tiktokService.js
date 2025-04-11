@@ -109,6 +109,13 @@ function configurarEventos() {
             controlarLoja('cima');
         } else if (data.comment.toLowerCase() === 'loja topo') {
             controlarLoja('topo');
+        } else if (data.comment.toLowerCase() === 'backup') {
+            console.log(`Comando de backup recebido de ${data.uniqueId}`);
+            cookieService.fazerBackupManual().then(() => {
+                console.log('Backup manual concluído com sucesso!');
+            }).catch(err => {
+                console.error('Erro ao executar backup manual:', err);
+            });
         } else {
             cookieService.comprarUpgrade(data.comment);
         }

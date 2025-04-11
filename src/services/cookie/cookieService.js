@@ -1,9 +1,15 @@
+const puppeteer = require('puppeteer');
 const fs = require('fs');
+const path = require('path');
+const { COOKIE_CLICKER_URL, BACKUP_INTERVAL } = require('../../config/constants');
+const semaforo = require('../../utils/semaforo');
 const { delay } = require('../../utils/helpers');
 const { MAX_RETRIES } = require('../../config/constants');
 
-let isBackupInProgress = false;
+let browser = null;
 let page = null;
+let ultimoBackup = Date.now();
+let isBackupInProgress = false;
 let backupTimeout = null;
 let lastBackupTime = null;
 
@@ -74,154 +80,271 @@ function pararBackupAutomatico() {
     }
 }
 
-// Função para clicar no cookie de forma visível
-async function clicarCookie(vezes) {
-    if (isBackupInProgress) {
-        console.log('Backup em andamento, pulando cliques...');
-        return;
-    }
-    
+// Função para fechar o menu de opções
+async function fecharMenuOpcoes() {
     try {
-        const cookie = await page.$('#bigCookie');
-        if (cookie) {
-            for (let i = 0; i < vezes; i++) {
-                if (isBackupInProgress) break;
-                await cookie.click();
-                await new Promise(resolve => setTimeout(resolve, 10));
-            }
+        if (!page) {
+            console.error('Página não encontrada');
+            return;
         }
+
+        // Espera um pouco para garantir que o menu está carregado
+        await delay(1000);
+
+        // Tenta fechar o menu de opções
+        await page.evaluate(() => {
+            const optionsButton = document.querySelector('div.subButton');
+            if (optionsButton && optionsButton.textContent.trim() === 'Opções') {
+                optionsButton.click();
+            }
+        });
+
+        // Espera um pouco após tentar fechar o menu
+        await delay(1000);
     } catch (err) {
-        console.error('Erro ao clicar no cookie:', err);
+        console.error('Erro ao fechar menu de opções:', err);
     }
 }
 
-// Função para fazer backup do salvamento
-async function fazerBackup() {
-    console.log('Iniciando backup do salvamento...');
-    const page = getPage();
-    
-    if (!page) {
-        console.log('Página não encontrada, não é possível fazer backup');
-        return;
-    }
+// Função para verificar se o menu está aberto
+async function verificarMenuAberto() {
+    return await page.evaluate(() => {
+        const menu = document.querySelector('#menu');
+        return menu && menu.children.length > 0;
+    });
+}
 
-    for (let tentativa = 1; tentativa <= 3; tentativa++) {
-        try {
-            console.log(`Tentativa ${tentativa} de fazer backup...`);
-            
-            // Verifica se a página ainda está conectada
-            if (!page.isClosed()) {
-                // Recarrega a página para garantir que está atualizada
-                await page.reload({ waitUntil: 'networkidle0' });
-                
-                // Espera o jogo carregar completamente
-                await page.waitForSelector('.subButton', { visible: true, timeout: 10000 });
-                await page.click('.subButton');
-                
-                // Espera o menu de opções aparecer
-                await page.waitForSelector('a.option.smallFancyButton', { visible: true, timeout: 10000 });
-                
-                // Clica no botão de exportar
-                const exportButton = await page.$('a.option.smallFancyButton[onclick*="ExportSave"]');
-                if (!exportButton) {
-                    throw new Error('Botão de exportar não encontrado');
+// Função interna para fazer backup
+async function _fazerBackup(manual = false) {
+    try {
+        if (!page) {
+            throw new Error('Página não encontrada');
+        }
+
+        // Espera um pouco para garantir que o jogo está carregado
+        await delay(1000);
+
+        // Verifica se o objeto Game está disponível
+        const gameDisponivel = await page.evaluate(() => {
+            return typeof window.Game !== 'undefined';
+        });
+
+        if (!gameDisponivel) {
+            throw new Error('Objeto Game não está disponível');
+        }
+
+        // Espera mais um pouco para garantir que o jogo está pronto
+        await delay(1000);
+
+        // Verifica se o menu já está aberto
+        const menuAberto = await verificarMenuAberto();
+        
+        // Se o menu não estiver aberto, abre ele
+        if (!menuAberto) {
+            await page.evaluate(() => {
+                const optionsButton = document.querySelector('div.subButton');
+                if (optionsButton && optionsButton.textContent.trim() === 'Opções') {
+                    optionsButton.click();
                 }
-                await exportButton.click();
-                
-                // Espera o prompt aparecer
-                await page.waitForSelector('#prompt', { visible: true, timeout: 10000 });
-                
-                // Obtém o texto do save
-                const saveData = await page.evaluate(() => {
-                    const textarea = document.querySelector('#promptContent');
-                    return textarea ? textarea.textContent : null;
-                });
-                
-                if (!saveData) {
-                    throw new Error('Não foi possível obter os dados do save');
-                }
-                
-                // Cria o diretório de backups se não existir
-                if (!fs.existsSync('backups')) {
-                    fs.mkdirSync('backups');
-                }
-                
-                // Salva o arquivo
-                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                const backupPath = `backups/save_${timestamp}.txt`;
-                fs.writeFileSync(backupPath, saveData);
-                
-                console.log(`Backup salvo com sucesso em: ${backupPath}`);
-                
-                // Tenta fechar o diálogo
-                try {
-                    await page.click('#promptOption0');
-                } catch (err) {
-                    console.log('Não foi possível fechar o diálogo, continuando...');
-                }
-                
-                return;
-            } else {
-                console.log('Página fechada, não é possível fazer backup');
-                return;
+            });
+            // Espera o menu de opções aparecer
+            await delay(1000);
+        }
+
+        // Clica no botão de exportar
+        await page.evaluate(() => {
+            const exportButton = document.querySelector('a.option.smallFancyButton[onclick*="ExportSave"]');
+            if (exportButton) {
+                exportButton.click();
             }
-        } catch (err) {
-            console.log(`Tentativa ${tentativa} de backup falhou:`, err.message);
-            if (tentativa === 3) {
-                console.log('Não foi possível fazer backup após 3 tentativas');
-            } else {
-                await delay(2000);
+        });
+
+        // Espera o prompt aparecer
+        await delay(1000);
+
+        // Obtém o conteúdo do textarea
+        const saveData = await page.evaluate(() => {
+            const textarea = document.querySelector('#textareaPrompt');
+            return textarea ? textarea.value : null;
+        });
+
+        if (!saveData) {
+            throw new Error('Não foi possível obter os dados do save');
+        }
+
+        const backupDir = path.join(__dirname, '../../../backups');
+        if (!fs.existsSync(backupDir)) {
+            fs.mkdirSync(backupDir, { recursive: true });
+        }
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupPath = path.join(backupDir, `backup_${timestamp}.txt`);
+
+        fs.writeFileSync(backupPath, saveData);
+        console.log(`Backup salvo em: ${backupPath}`);
+        ultimoBackup = Date.now();
+
+        // Clica no botão "Tudo pronto!"
+        await page.evaluate(() => {
+            const tudoProntoButton = document.querySelector('a#promptOption0');
+            if (tudoProntoButton) {
+                tudoProntoButton.click();
             }
+        });
+
+        // Espera um pouco após clicar em "Tudo pronto!"
+        await delay(1000);
+
+        // Fecha o menu de opções
+        await fecharMenuOpcoes();
+
+        if (manual) {
+            console.log('Backup manual concluído com sucesso!');
+            return true;
+        }
+    } catch (err) {
+        console.error('Erro ao fazer backup:', err);
+        if (manual) {
+            throw err;
         }
     }
+}
+
+// Função para fazer backup automático
+async function fazerBackup() {
+    return semaforo.executarComPrioridade(() => _fazerBackup(false));
+}
+
+// Função para fazer backup manual
+async function fazerBackupManual() {
+    return semaforo.executarComPrioridade(() => _fazerBackup(true));
+}
+
+// Função para clicar no cookie
+async function clicarCookie(vezes = 1) {
+    return semaforo.executar(async () => {
+        try {
+            if (!page) {
+                console.error('Página não encontrada');
+                return;
+            }
+
+            await page.evaluate((numClicks) => {
+                const bigCookie = document.getElementById('bigCookie');
+                if (bigCookie) {
+                    for (let i = 0; i < numClicks; i++) {
+                        bigCookie.click();
+                    }
+                }
+            }, vezes);
+
+            // Verifica se é hora de fazer backup
+            if (Date.now() - ultimoBackup >= BACKUP_INTERVAL) {
+                await fazerBackup();
+            }
+        } catch (err) {
+            console.error('Erro ao clicar no cookie:', err);
+        }
+    });
 }
 
 // Função para comprar upgrade
-async function comprarUpgrade(nomeUpgrade) {
-    if (isBackupInProgress) {
-        console.log('Backup em andamento, pulando compra...');
-        return;
-    }
-    
-    try {
-        if (!nomeUpgrade) return;
-        
-        if (nomeUpgrade.toLowerCase() === 'up') {
-            const upgrades = await page.$$('.crate.upgrade.enabled');
-            if (upgrades.length > 0) {
-                await upgrades[0].click();
-                console.log('Primeiro upgrade disponível comprado com sucesso!');
+async function comprarUpgrade(upgradeId) {
+    return semaforo.executar(async () => {
+        try {
+            if (!page) {
+                console.error('Página não encontrada');
                 return;
             }
-            return;
+
+            await page.evaluate((id) => {
+                const upgrade = Game.UpgradesById[id];
+                if (upgrade && !upgrade.bought) {
+                    Game.Upgrade(id);
+                }
+            }, upgradeId);
+
+            // Verifica se é hora de fazer backup
+            if (Date.now() - ultimoBackup >= BACKUP_INTERVAL) {
+                await fazerBackup();
+            }
+        } catch (err) {
+            console.error('Erro ao comprar upgrade:', err);
         }
-        
-        const upgradeMatch = nomeUpgrade.match(/^up(\d+)$/i);
-        if (upgradeMatch) {
-            const upgradeIndex = parseInt(upgradeMatch[1]) - 1;
-            const upgrades = await page.$$('.crate.upgrade.enabled');
+    });
+}
+
+// Função para importar save
+async function importarSave(saveData) {
+    return semaforo.executarComPrioridade(async () => {
+        try {
+            if (!page) {
+                console.error('Página não encontrada');
+                return;
+            }
+
+            // Espera um pouco para garantir que o jogo está carregado
+            await delay(1000);
+
+            // Verifica se o objeto Game está disponível
+            const gameDisponivel = await page.evaluate(() => {
+                return typeof window.Game !== 'undefined';
+            });
+
+            if (!gameDisponivel) {
+                console.error('Objeto Game não está disponível');
+                return;
+            }
+
+            // Espera mais um pouco para garantir que o jogo está pronto
+            await delay(1000);
+
+            // Verifica se o menu já está aberto
+            const menuAberto = await verificarMenuAberto();
             
-            if (upgrades[upgradeIndex]) {
-                await upgrades[upgradeIndex].click();
-                console.log(`Upgrade ${upgradeIndex + 1} comprado com sucesso!`);
-                return;
+            // Se o menu não estiver aberto, abre ele
+            if (!menuAberto) {
+                await page.evaluate(() => {
+                    const optionsButton = document.querySelector('div.subButton');
+                    if (optionsButton && optionsButton.textContent.trim() === 'Opções') {
+                        optionsButton.click();
+                    }
+                });
+                // Espera o menu de opções aparecer
+                await delay(1000);
             }
-            return;
+
+            // Importa o save
+            await page.evaluate((data) => {
+                try {
+                    if (Game.ImportSave) {
+                        Game.ImportSave(data);
+                    }
+                } catch (err) {
+                    console.error('Erro ao importar save:', err);
+                }
+            }, saveData);
+
+            // Espera o save ser carregado
+            await delay(3000);
+
+            // Clica no botão "Tudo pronto!"
+            await page.evaluate(() => {
+                const tudoProntoButton = document.querySelector('a#promptOption0');
+                if (tudoProntoButton) {
+                    tudoProntoButton.click();
+                }
+            });
+
+            // Espera um pouco após clicar em "Tudo pronto!"
+            await delay(2000);
+
+            // Fecha o menu de opções
+            await fecharMenuOpcoes();
+        } catch (err) {
+            console.error('Erro ao importar save:', err);
         }
-        
-        const produtos = await page.$$('.product.unlocked.enabled');
-        for (const produto of produtos) {
-            const nome = await produto.$eval('.productName', el => el.textContent.trim());
-            if (nome.toLowerCase() === nomeUpgrade.toLowerCase()) {
-                await produto.click();
-                console.log(`Produto ${nomeUpgrade} comprado com sucesso!`);
-                return;
-            }
-        }
-        
-    } catch (err) {
-        console.error('Erro ao comprar upgrade:', err.message);
-    }
+    });
 }
 
 module.exports = {
@@ -229,7 +352,9 @@ module.exports = {
     getPage,
     clicarCookie,
     fazerBackup,
+    fazerBackupManual,
     comprarUpgrade,
     iniciarBackupAutomatico,
-    pararBackupAutomatico
+    pararBackupAutomatico,
+    importarSave
 }; 
