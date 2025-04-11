@@ -1,7 +1,6 @@
 const { WebcastPushConnection } = require('tiktok-live-connector');
 const puppeteer = require('puppeteer');
 const fs = require('fs');
-const player = require('play-sound')(opts = {});
 
 const tiktokUsername = 'maesttrya';
 let tiktokLiveConnection = null;
@@ -15,9 +14,6 @@ let page = null;
 const CLICKS_PER_BATCH = 50; // Número de cliques por lote
 const BATCH_DELAY = 100; // Delay entre lotes em ms
 const MAX_RETRIES = 3; // Número máximo de tentativas para operações
-
-// URL da música Lofi (você pode substituir por qualquer URL de música Lofi 24h)
-const LOFI_URL = 'https://www.youtube.com/watch?v=jfKfPfyJRdk';
 
 // Função para esperar um tempo específico
 function delay(ms) {
@@ -383,24 +379,8 @@ process.on('uncaughtException', async (err) => {
     process.exit(1);
 });
 
-// Função para tocar música Lofi
-function tocarLofi() {
-    try {
-        player.play(LOFI_URL, (err) => {
-            if (err) {
-                console.error('Erro ao tocar música:', err);
-                // Tenta novamente após 5 segundos
-                setTimeout(tocarLofi, 5000);
-            }
-        });
-    } catch (err) {
-        console.error('Erro ao iniciar música:', err);
-    }
-}
-
 // Inicia a conexão
 console.log('Iniciando conexão com a live...');
 inicializarNavegador().then(() => {
     conectarLive();
-    tocarLofi(); // Inicia a música Lofi
 });

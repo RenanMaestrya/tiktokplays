@@ -1,17 +1,16 @@
 {
   "name": "tiktokplays",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "",
+  "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
-    "play-sound": "^1.1.6",
-    "puppeteer": "^24.6.1",
-    "tiktok-live-connector": "^1.2.3"
+    "puppeteer": "^22.0.0",
+    "tiktok-live-connector": "^0.9.20"
   }
 }
