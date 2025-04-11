@@ -11,6 +11,6 @@
   "license": "ISC",
   "dependencies": {
     "puppeteer": "^22.0.0",
-    "tiktok-live-connector": "^0.9.20"
+    "tiktok-live-connector": "^1.2.3"
   }
 }

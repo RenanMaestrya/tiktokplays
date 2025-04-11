@@ -11,6 +11,10 @@ function setPage(newPage) {
     page = newPage;
 }
 
+function getPage() {
+    return page;
+}
+
 // Função para agendar o próximo backup
 function agendarProximoBackup() {
     // Limpa qualquer timeout existente
@@ -239,6 +243,7 @@ async function comprarUpgrade(nomeUpgrade) {
 
 module.exports = {
     setPage,
+    getPage,
     clicarCookie,
     fazerBackup,
     comprarUpgrade,

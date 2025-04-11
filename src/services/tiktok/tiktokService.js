@@ -71,9 +71,15 @@ function configurarEventos() {
 // Função para conectar à live
 async function conectarLive() {
     try {
+        console.log(`Tentando conectar à live do usuário: ${TIKTOK_USERNAME}`);
         tiktokLiveConnection = new WebcastPushConnection(TIKTOK_USERNAME);
         
         const state = await tiktokLiveConnection.connect();
+        
+        if (!state || !state.roomId) {
+            throw new Error('Conexão estabelecida, mas não foi possível obter o ID da sala');
+        }
+        
         console.log(`Conectado à sala com ID ${state.roomId}`);
         tentativasReconexao = 0;
         
@@ -81,6 +87,7 @@ async function conectarLive() {
         
     } catch (err) {
         console.error('Falha ao conectar:', err.message);
+        console.error('Detalhes do erro:', err);
         
         if (tentativasReconexao < MAX_TENTATIVAS) {
             tentativasReconexao++;

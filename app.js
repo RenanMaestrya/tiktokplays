@@ -3,6 +3,7 @@ const fs = require('fs');
 const { delay, obterUltimoBackup } = require('./src/utils/helpers');
 const cookieService = require('./src/services/cookie/cookieService');
 const tiktokService = require('./src/services/tiktok/tiktokService');
+const musicService = require('./src/services/music/musicService');
 
 let browser = null;
 
@@ -65,7 +66,7 @@ async function inicializarNavegador() {
         }
         
         try {
-            await page.waitForSelector('#langSelect-PT-BR', { visible: true });
+            await page.waitForSelector('#langSelect-PT-BR', { visible: true, timeout: 10000 });
             await page.click('#langSelect-PT-BR');
         } catch (err) {
             console.log('Botão de idioma não encontrado');
@@ -77,11 +78,22 @@ async function inicializarNavegador() {
             const saveData = fs.readFileSync(`backups/${ultimoBackup}`, 'utf8');
             
             try {
-                await page.waitForSelector('.subButton', { visible: true, timeout: 10000 });
+                // Espera o jogo carregar completamente
+                await page.waitForSelector('.subButton', { visible: true, timeout: 15000 });
                 await page.click('.subButton');
-                await page.waitForSelector('.option.smallFancyButton', { visible: true, timeout: 5000 });
-                await page.click('a.option.smallFancyButton[onclick*="ImportSave"]');
-                await page.waitForSelector('#textareaPrompt', { visible: true, timeout: 5000 });
+                
+                // Espera o menu de opções aparecer
+                await page.waitForSelector('.option.smallFancyButton', { visible: true, timeout: 10000 });
+                
+                // Clica no botão de importar
+                const importButton = await page.$('a.option.smallFancyButton[onclick*="ImportSave"]');
+                if (!importButton) {
+                    throw new Error('Botão de importar não encontrado');
+                }
+                await importButton.click();
+                
+                // Espera o textarea aparecer
+                await page.waitForSelector('#textareaPrompt', { visible: true, timeout: 10000 });
                 
                 await page.evaluate((data) => {
                     const textarea = document.querySelector('#textareaPrompt');
@@ -91,7 +103,7 @@ async function inicializarNavegador() {
                     }
                 }, saveData);
                 
-                await page.waitForSelector('#promptOption0', { visible: true, timeout: 5000 });
+                await page.waitForSelector('#promptOption0', { visible: true, timeout: 10000 });
                 await page.click('#promptOption0');
                 await delay(2000);
                 
@@ -118,6 +130,7 @@ async function limparRecursos() {
             browser = null;
         }
         tiktokService.desconectarLive();
+        musicService.stop();
     } catch (err) {
         console.error('Erro ao limpar recursos:', err);
     }
@@ -125,8 +138,77 @@ async function limparRecursos() {
 
 // Inicia a conexão
 console.log('Iniciando conexão com a live...');
-inicializarNavegador().then(() => {
+inicializarNavegador().then(async () => {
+    // Inicializa e inicia o serviço de música
+    await musicService.initialize();
+    musicService.start();
+    
+    // Conecta ao TikTok Live
     tiktokService.conectarLive();
+    
+    // Aguarda um tempo para garantir que a página esteja pronta
+    await delay(5000);
+    
+    // Tenta carregar o backup
+    const ultimoBackup = obterUltimoBackup();
+    if (ultimoBackup) {
+        try {
+            const saveData = fs.readFileSync(`backups/${ultimoBackup}`, 'utf8');
+            const page = cookieService.getPage();
+            
+            if (!page) {
+                throw new Error('Página não encontrada');
+            }
+            
+            // Espera o jogo carregar completamente
+            console.log('Aguardando o jogo carregar...');
+            await page.waitForSelector('.subButton', { visible: true, timeout: 15000 });
+            console.log('Clicando em Opções...');
+            await page.click('.subButton');
+            
+            // Espera o menu de opções aparecer
+            console.log('Aguardando menu de opções...');
+            await page.waitForSelector('a.option.smallFancyButton', { visible: true, timeout: 10000 });
+            
+            // Encontra o botão de importar
+            console.log('Procurando botão de importar...');
+            const importButton = await page.$('a.option.smallFancyButton[onclick*="ImportSave"]');
+            if (!importButton) {
+                throw new Error('Botão de importar não encontrado');
+            }
+            console.log('Clicando em Importar salvamento...');
+            await importButton.click();
+            
+            // Espera o textarea aparecer
+            console.log('Aguardando campo de texto...');
+            await page.waitForSelector('#textareaPrompt', { visible: true, timeout: 10000 });
+            
+            // Cola o save no textarea
+            console.log('Colando save...');
+            await page.evaluate((data) => {
+                const textarea = document.querySelector('#textareaPrompt');
+                if (textarea) {
+                    textarea.value = data;
+                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }, saveData);
+            
+            // Clica no botão de carregar
+            console.log('Clicando em Carregar...');
+            await page.waitForSelector('#promptOption0', { visible: true, timeout: 10000 });
+            await page.click('#promptOption0');
+            await delay(2000);
+            
+            console.log('Backup carregado com sucesso!');
+        } catch (err) {
+            console.error('Erro ao carregar backup:', err);
+            console.log('Iniciando novo jogo...');
+        }
+    } else {
+        console.log('Nenhum backup encontrado. Iniciando novo jogo.');
+    }
+    
+    // Inicia o backup automático
     cookieService.iniciarBackupAutomatico();
 });
 
