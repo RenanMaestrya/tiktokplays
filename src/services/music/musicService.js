@@ -11,19 +11,32 @@ class MusicService {
         this.player = null;
         this.playNextTimeout = null;
         this.platform = os.platform();
-        this.vlcPath = 'C:\\Program Files\\VideoLAN\\VLC\\vlc.exe';
+        // Lista de possíveis caminhos do VLC
+        this.possibleVlcPaths = [
+            'C:\\Program Files\\VideoLAN\\VLC\\vlc.exe',
+            'C:\\ProgramFiles\\VideoLAN\\VLC\\vlc.exe'
+        ];
+        this.vlcPath = null;
     }
 
     async initialize() {
         try {
             // Verifica se o VLC está instalado no Windows
             if (this.platform === 'win32') {
-                if (!fs.existsSync(this.vlcPath)) {
+                // Procura o VLC em todos os caminhos possíveis
+                for (const path of this.possibleVlcPaths) {
+                    if (fs.existsSync(path)) {
+                        this.vlcPath = path;
+                        break;
+                    }
+                }
+
+                if (!this.vlcPath) {
                     console.error('\n=== ATENÇÃO ===');
                     console.error('VLC Media Player não encontrado!');
                     console.error('Para que a música funcione no Windows, você precisa:');
                     console.error('1. Baixar e instalar o VLC Media Player: https://www.videolan.org/vlc/');
-                    console.error('2. Instalar na pasta padrão: C:\\Program Files\\VideoLAN\\VLC');
+                    console.error('2. Instalar na pasta padrão do VLC');
                     console.error('3. Reiniciar o aplicativo após a instalação');
                     console.error('================\n');
                     return;
@@ -75,6 +88,10 @@ class MusicService {
         if (this.platform === 'darwin') { // macOS
             command = `afplay -v 0.3 "${musicFile}"`;
         } else if (this.platform === 'win32') { // Windows
+            if (!this.vlcPath) {
+                console.error('VLC não encontrado. Por favor, instale o VLC Media Player.');
+                return;
+            }
             // Usa o VLC com volume em 30% e modo headless
             command = `"${this.vlcPath}" "${musicFile}" --volume 30 --play-and-exit --qt-start-minimized`;
         } else {
