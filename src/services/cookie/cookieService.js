@@ -97,98 +97,81 @@ async function clicarCookie(vezes) {
 
 // Função para fazer backup do salvamento
 async function fazerBackup() {
-    if (isBackupInProgress) {
-        console.log('Backup já está em andamento, aguardando...');
+    console.log('Iniciando backup do salvamento...');
+    const page = getPage();
+    
+    if (!page) {
+        console.log('Página não encontrada, não é possível fazer backup');
         return;
     }
-    
-    isBackupInProgress = true;
-    console.log('Iniciando backup do salvamento...');
-    
-    for (let retry = 0; retry < MAX_RETRIES; retry++) {
+
+    for (let tentativa = 1; tentativa <= 3; tentativa++) {
         try {
-            console.log(`Tentativa ${retry + 1} de fazer backup...`);
+            console.log(`Tentativa ${tentativa} de fazer backup...`);
             
-            // Espera pelo botão de menu
-            await page.waitForSelector('.subButton', { visible: true, timeout: 10000 });
-            await page.click('.subButton');
-            
-            // Espera pelo menu de opções
-            await page.waitForFunction(() => {
-                const options = document.querySelectorAll('.option.smallFancyButton');
-                return options.length > 0;
-            }, { timeout: 10000 });
-            
-            // Clica no botão de exportar
-            const exportButton = await page.$('a.option.smallFancyButton[onclick*="ExportSave"]');
-            if (!exportButton) {
-                throw new Error('Botão de exportar não encontrado');
-            }
-            await exportButton.click();
-            
-            // Espera pelo textarea
-            await page.waitForFunction(() => {
-                const textarea = document.querySelector('#textareaPrompt');
-                return textarea && textarea.value.length > 0;
-            }, { timeout: 10000 });
-            
-            const saveData = await page.$eval('#textareaPrompt', el => el.value);
-            
-            if (!saveData) {
-                throw new Error('Dados de salvamento vazios');
-            }
-            
-            if (!fs.existsSync('backups')) {
-                fs.mkdirSync('backups');
-            }
-            
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const fileName = `backups/save_${timestamp}.txt`;
-            
-            fs.writeFileSync(fileName, saveData);
-            console.log(`Backup salvo com sucesso em: ${fileName}`);
-            
-            // Tenta fechar o diálogo
-            try {
-                await page.keyboard.press('Escape');
-                await delay(1000);
+            // Verifica se a página ainda está conectada
+            if (!page.isClosed()) {
+                // Recarrega a página para garantir que está atualizada
+                await page.reload({ waitUntil: 'networkidle0' });
                 
-                // Verifica se o diálogo foi fechado
-                const dialogClosed = await page.evaluate(() => {
-                    return !document.querySelector('#textareaPrompt');
+                // Espera o jogo carregar completamente
+                await page.waitForSelector('.subButton', { visible: true, timeout: 10000 });
+                await page.click('.subButton');
+                
+                // Espera o menu de opções aparecer
+                await page.waitForSelector('a.option.smallFancyButton', { visible: true, timeout: 10000 });
+                
+                // Clica no botão de exportar
+                const exportButton = await page.$('a.option.smallFancyButton[onclick*="ExportSave"]');
+                if (!exportButton) {
+                    throw new Error('Botão de exportar não encontrado');
+                }
+                await exportButton.click();
+                
+                // Espera o prompt aparecer
+                await page.waitForSelector('#prompt', { visible: true, timeout: 10000 });
+                
+                // Obtém o texto do save
+                const saveData = await page.evaluate(() => {
+                    const textarea = document.querySelector('#promptContent');
+                    return textarea ? textarea.textContent : null;
                 });
                 
-                if (!dialogClosed) {
-                    // Se o diálogo ainda estiver aberto, tenta clicar no botão de confirmar
-                    const confirmButton = await page.$('#promptOption0');
-                    if (confirmButton) {
-                        await confirmButton.click();
-                    }
+                if (!saveData) {
+                    throw new Error('Não foi possível obter os dados do save');
                 }
-            } catch (err) {
-                console.log('Não foi possível fechar o diálogo, continuando...');
-            }
-            
-            isBackupInProgress = false;
-            return;
-            
-        } catch (err) {
-            console.error(`Tentativa ${retry + 1} de backup falhou:`, err.message);
-            if (retry === MAX_RETRIES - 1) {
-                console.log('Número máximo de tentativas atingido. Pulando backup...');
-                isBackupInProgress = false;
+                
+                // Cria o diretório de backups se não existir
+                if (!fs.existsSync('backups')) {
+                    fs.mkdirSync('backups');
+                }
+                
+                // Salva o arquivo
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const backupPath = `backups/save_${timestamp}.txt`;
+                fs.writeFileSync(backupPath, saveData);
+                
+                console.log(`Backup salvo com sucesso em: ${backupPath}`);
+                
+                // Tenta fechar o diálogo
+                try {
+                    await page.click('#promptOption0');
+                } catch (err) {
+                    console.log('Não foi possível fechar o diálogo, continuando...');
+                }
+                
+                return;
+            } else {
+                console.log('Página fechada, não é possível fazer backup');
                 return;
             }
-            
-            // Tenta recarregar a página se falhar
-            try {
-                await page.reload();
-                await delay(5000); // Espera a página carregar
-            } catch (reloadErr) {
-                console.error('Erro ao recarregar a página:', reloadErr);
+        } catch (err) {
+            console.log(`Tentativa ${tentativa} de backup falhou:`, err.message);
+            if (tentativa === 3) {
+                console.log('Não foi possível fazer backup após 3 tentativas');
+            } else {
+                await delay(2000);
             }
-            
-            await delay(5000);
         }
     }
 }

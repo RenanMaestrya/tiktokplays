@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
+const os = require('os');
 
 class MusicService {
     constructor() {
@@ -8,7 +9,8 @@ class MusicService {
         this.currentMusicIndex = 0;
         this.isPlaying = false;
         this.player = null;
-        this.volume = 0.3;
+        this.playNextTimeout = null;
+        this.platform = os.platform();
     }
 
     async initialize() {
@@ -47,18 +49,30 @@ class MusicService {
         }
 
         const musicFile = this.musicFiles[this.currentMusicIndex];
-        
+        console.log(`Tocando: ${path.basename(musicFile)}`);
 
-        if (this.player) {
-            this.player.kill();
+        // Limpa qualquer timeout existente
+        if (this.playNextTimeout) {
+            clearTimeout(this.playNextTimeout);
         }
 
-        this.player = exec(`afplay -v ${this.volume} "${musicFile}"`, (error) => {
+        let command;
+        if (this.platform === 'darwin') { // macOS
+            command = `afplay -v 0.3 "${musicFile}"`;
+        } else if (this.platform === 'win32') { // Windows
+            command = `powershell -c (New-Object Media.SoundPlayer).PlaySync()`;
+        } else {
+            console.error('Sistema operacional não suportado');
+            return;
+        }
+
+        this.player = exec(command, (error) => {
             if (error) {
                 console.error('Erro ao reproduzir música:', error);
             }
             this.currentMusicIndex++;
-            this.playNext();
+            // Usa setTimeout para evitar recursão
+            this.playNextTimeout = setTimeout(() => this.playNext(), 1000);
         });
 
         this.isPlaying = true;
@@ -71,6 +85,10 @@ class MusicService {
     }
 
     stop() {
+        if (this.playNextTimeout) {
+            clearTimeout(this.playNextTimeout);
+            this.playNextTimeout = null;
+        }
         if (this.player) {
             this.player.kill();
             this.player = null;
