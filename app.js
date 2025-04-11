@@ -15,6 +15,9 @@ const CLICKS_PER_BATCH = 50; // Número de cliques por lote
 const BATCH_DELAY = 100; // Delay entre lotes em ms
 const MAX_RETRIES = 3; // Número máximo de tentativas para operações
 
+// Variável global para controlar o lock do backup
+let isBackupInProgress = false;
+
 // Função para esperar um tempo específico
 function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -22,10 +25,16 @@ function delay(ms) {
 
 // Função para clicar no cookie de forma visível
 async function clicarCookie(vezes) {
+    if (isBackupInProgress) {
+        console.log('Backup em andamento, pulando cliques...');
+        return;
+    }
+    
     try {
         const cookie = await page.$('#bigCookie');
         if (cookie) {
             for (let i = 0; i < vezes; i++) {
+                if (isBackupInProgress) break;
                 await cookie.click();
                 // Pequena pausa entre cliques para ser visível
                 await new Promise(resolve => setTimeout(resolve, 10));
@@ -62,6 +71,14 @@ function obterUltimoBackup() {
 
 // Função para fazer backup do salvamento
 async function fazerBackup() {
+    if (isBackupInProgress) {
+        console.log('Backup já está em andamento, aguardando...');
+        return;
+    }
+    
+    isBackupInProgress = true;
+    console.log('Iniciando backup do salvamento...');
+    
     for (let retry = 0; retry < MAX_RETRIES; retry++) {
         try {
             console.log(`Tentativa ${retry + 1} de fazer backup...`);
@@ -112,12 +129,14 @@ async function fazerBackup() {
                 }
             }
             
+            isBackupInProgress = false;
             return;
             
         } catch (err) {
             console.error(`Tentativa ${retry + 1} de backup falhou:`, err.message);
             if (retry === MAX_RETRIES - 1) {
                 console.log('Número máximo de tentativas atingido. Pulando backup...');
+                isBackupInProgress = false;
                 return;
             }
             // Espera mais tempo entre tentativas
@@ -128,6 +147,11 @@ async function fazerBackup() {
 
 // Função para comprar upgrade
 async function comprarUpgrade(nomeUpgrade) {
+    if (isBackupInProgress) {
+        console.log('Backup em andamento, pulando compra...');
+        return;
+    }
+    
     try {
         if (!nomeUpgrade) return;
         
