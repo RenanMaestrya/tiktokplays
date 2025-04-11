@@ -64,14 +64,31 @@ function obterUltimoBackup() {
 async function fazerBackup() {
     for (let retry = 0; retry < MAX_RETRIES; retry++) {
         try {
-            console.log('Iniciando backup do salvamento...');
+            console.log(`Tentativa ${retry + 1} de fazer backup...`);
             
+            // Espera mais tempo para garantir que a página está carregada
+            await page.waitForSelector('.subButton', { visible: true, timeout: 30000 });
+            
+            // Clica no botão de opções
             await page.click('.subButton');
-            await page.waitForSelector('.option.smallFancyButton', { visible: true, timeout: 5000 });
+            
+            // Espera mais tempo para o menu aparecer
+            await page.waitForSelector('.option.smallFancyButton', { visible: true, timeout: 30000 });
+            
+            // Clica no botão de exportar
             await page.click('a.option.smallFancyButton[onclick*="ExportSave"]');
-            await page.waitForSelector('#textareaPrompt', { visible: true, timeout: 5000 });
+            
+            // Espera mais tempo para o textarea aparecer
+            await page.waitForSelector('#textareaPrompt', { visible: true, timeout: 30000 });
+            
+            // Espera um pouco mais para garantir que os dados foram carregados
+            await delay(2000);
             
             const saveData = await page.$eval('#textareaPrompt', el => el.value);
+            
+            if (!saveData) {
+                throw new Error('Dados de salvamento vazios');
+            }
             
             if (!fs.existsSync('backups')) {
                 fs.mkdirSync('backups');
@@ -81,66 +98,74 @@ async function fazerBackup() {
             const fileName = `backups/save_${timestamp}.txt`;
             
             fs.writeFileSync(fileName, saveData);
-            console.log(`Backup salvo em: ${fileName}`);
+            console.log(`Backup salvo com sucesso em: ${fileName}`);
             
-            await page.keyboard.press('Escape');
+            // Tenta fechar o diálogo de várias formas
+            try {
+                await page.keyboard.press('Escape');
+            } catch (err) {
+                console.log('Tentando fechar diálogo de outra forma...');
+                try {
+                    await page.click('#promptOption0');
+                } catch (err) {
+                    console.log('Não foi possível fechar o diálogo, continuando...');
+                }
+            }
+            
             return;
             
         } catch (err) {
-            console.error(`Tentativa ${retry + 1} de backup falhou:`, err);
-            if (retry === MAX_RETRIES - 1) throw err;
-            await delay(1000);
+            console.error(`Tentativa ${retry + 1} de backup falhou:`, err.message);
+            if (retry === MAX_RETRIES - 1) {
+                console.log('Número máximo de tentativas atingido. Pulando backup...');
+                return;
+            }
+            // Espera mais tempo entre tentativas
+            await delay(5000);
         }
     }
 }
 
 // Função para comprar upgrade
 async function comprarUpgrade(nomeUpgrade) {
-    for (let retry = 0; retry < MAX_RETRIES; retry++) {
-        try {
-            if (nomeUpgrade.toLowerCase() === 'up') {
-                const upgrades = await page.$$('.crate.upgrade.enabled');
-                if (upgrades.length > 0) {
-                    await upgrades[0].click();
-                    console.log('Primeiro upgrade disponível comprado com sucesso!');
-                    return;
-                }
-                console.log('Nenhum upgrade disponível para comprar');
+    try {
+        if (!nomeUpgrade) return;
+        
+        if (nomeUpgrade.toLowerCase() === 'up') {
+            const upgrades = await page.$$('.crate.upgrade.enabled');
+            if (upgrades.length > 0) {
+                await upgrades[0].click();
+                console.log('Primeiro upgrade disponível comprado com sucesso!');
                 return;
             }
-            
-            const upgradeMatch = nomeUpgrade.match(/^up(\d+)$/i);
-            if (upgradeMatch) {
-                const upgradeIndex = parseInt(upgradeMatch[1]) - 1;
-                const upgrades = await page.$$('.crate.upgrade.enabled');
-                
-                if (upgrades[upgradeIndex]) {
-                    await upgrades[upgradeIndex].click();
-                    console.log(`Upgrade ${upgradeIndex + 1} comprado com sucesso!`);
-                    return;
-                }
-                console.log(`Upgrade ${upgradeIndex + 1} não encontrado ou não disponível`);
-                return;
-            }
-            
-            const produtos = await page.$$('.product.unlocked.enabled');
-            for (const produto of produtos) {
-                const nome = await produto.$eval('.productName', el => el.textContent.trim());
-                if (nome.toLowerCase() === nomeUpgrade.toLowerCase()) {
-                    await produto.click();
-                    console.log(`Produto ${nomeUpgrade} comprado com sucesso!`);
-                    return;
-                }
-            }
-            
-            console.log(`${nomeUpgrade} não encontrado ou não disponível`);
             return;
-            
-        } catch (err) {
-            console.error(`Tentativa ${retry + 1} de comprar upgrade falhou:`, err);
-            if (retry === MAX_RETRIES - 1) throw err;
-            await delay(1000);
         }
+        
+        const upgradeMatch = nomeUpgrade.match(/^up(\d+)$/i);
+        if (upgradeMatch) {
+            const upgradeIndex = parseInt(upgradeMatch[1]) - 1;
+            const upgrades = await page.$$('.crate.upgrade.enabled');
+            
+            if (upgrades[upgradeIndex]) {
+                await upgrades[upgradeIndex].click();
+                console.log(`Upgrade ${upgradeIndex + 1} comprado com sucesso!`);
+                return;
+            }
+            return;
+        }
+        
+        const produtos = await page.$$('.product.unlocked.enabled');
+        for (const produto of produtos) {
+            const nome = await produto.$eval('.productName', el => el.textContent.trim());
+            if (nome.toLowerCase() === nomeUpgrade.toLowerCase()) {
+                await produto.click();
+                console.log(`Produto ${nomeUpgrade} comprado com sucesso!`);
+                return;
+            }
+        }
+        
+    } catch (err) {
+        console.error('Erro ao comprar upgrade:', err.message);
     }
 }
 
