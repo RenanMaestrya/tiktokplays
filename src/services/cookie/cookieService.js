@@ -105,12 +105,28 @@ async function fazerBackup() {
         try {
             console.log(`Tentativa ${retry + 1} de fazer backup...`);
             
-            await page.waitForSelector('.subButton', { visible: true, timeout: 30000 });
+            // Espera pelo botão de menu
+            await page.waitForSelector('.subButton', { visible: true, timeout: 10000 });
             await page.click('.subButton');
-            await page.waitForSelector('.option.smallFancyButton', { visible: true, timeout: 30000 });
-            await page.click('a.option.smallFancyButton[onclick*="ExportSave"]');
-            await page.waitForSelector('#textareaPrompt', { visible: true, timeout: 30000 });
-            await delay(2000);
+            
+            // Espera pelo menu de opções
+            await page.waitForFunction(() => {
+                const options = document.querySelectorAll('.option.smallFancyButton');
+                return options.length > 0;
+            }, { timeout: 10000 });
+            
+            // Clica no botão de exportar
+            const exportButton = await page.$('a.option.smallFancyButton[onclick*="ExportSave"]');
+            if (!exportButton) {
+                throw new Error('Botão de exportar não encontrado');
+            }
+            await exportButton.click();
+            
+            // Espera pelo textarea
+            await page.waitForFunction(() => {
+                const textarea = document.querySelector('#textareaPrompt');
+                return textarea && textarea.value.length > 0;
+            }, { timeout: 10000 });
             
             const saveData = await page.$eval('#textareaPrompt', el => el.value);
             
@@ -128,15 +144,25 @@ async function fazerBackup() {
             fs.writeFileSync(fileName, saveData);
             console.log(`Backup salvo com sucesso em: ${fileName}`);
             
+            // Tenta fechar o diálogo
             try {
                 await page.keyboard.press('Escape');
-            } catch (err) {
-                console.log('Tentando fechar diálogo de outra forma...');
-                try {
-                    await page.click('#promptOption0');
-                } catch (err) {
-                    console.log('Não foi possível fechar o diálogo, continuando...');
+                await delay(1000);
+                
+                // Verifica se o diálogo foi fechado
+                const dialogClosed = await page.evaluate(() => {
+                    return !document.querySelector('#textareaPrompt');
+                });
+                
+                if (!dialogClosed) {
+                    // Se o diálogo ainda estiver aberto, tenta clicar no botão de confirmar
+                    const confirmButton = await page.$('#promptOption0');
+                    if (confirmButton) {
+                        await confirmButton.click();
+                    }
                 }
+            } catch (err) {
+                console.log('Não foi possível fechar o diálogo, continuando...');
             }
             
             isBackupInProgress = false;
@@ -149,6 +175,15 @@ async function fazerBackup() {
                 isBackupInProgress = false;
                 return;
             }
+            
+            // Tenta recarregar a página se falhar
+            try {
+                await page.reload();
+                await delay(5000); // Espera a página carregar
+            } catch (reloadErr) {
+                console.error('Erro ao recarregar a página:', reloadErr);
+            }
+            
             await delay(5000);
         }
     }
