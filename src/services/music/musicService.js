@@ -77,7 +77,7 @@ class MusicService {
         }
 
         const musicFile = this.musicFiles[this.currentMusicIndex];
-        console.log(`Tocando: ${path.basename(musicFile)}`);
+
 
         // Limpa qualquer timeout existente
         if (this.playNextTimeout) {
