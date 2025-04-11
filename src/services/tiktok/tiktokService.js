@@ -55,32 +55,24 @@ async function controlarLoja(acao) {
             return;
         }
 
+        const PIXELS_POR_MOVIMENTO = 200; // Quantidade fixa de pixels para mover
+
         if (acao === 'baixo') {
-            await page.evaluate(() => {
+            await page.evaluate((pixels) => {
                 const sectionRight = document.getElementById('sectionRight');
-                const store = document.getElementById('store');
-                if (sectionRight && store) {
-                    // Calcula a posição do store em relação ao sectionRight
-                    const storeRect = store.getBoundingClientRect();
-                    const sectionRect = sectionRight.getBoundingClientRect();
-                    const scrollPosition = storeRect.top - sectionRect.top + sectionRight.scrollTop;
-                    sectionRight.scrollTop = scrollPosition;
+                if (sectionRight) {
+                    sectionRight.scrollTop += pixels;
                 }
-            });
-            console.log('Loja movida para baixo');
+            }, PIXELS_POR_MOVIMENTO);
+            console.log(`Loja movida ${PIXELS_POR_MOVIMENTO} pixels para baixo`);
         } else if (acao === 'cima') {
-            await page.evaluate(() => {
+            await page.evaluate((pixels) => {
                 const sectionRight = document.getElementById('sectionRight');
-                const store = document.getElementById('store');
-                if (sectionRight && store) {
-                    // Calcula a posição do início do store em relação ao sectionRight
-                    const storeRect = store.getBoundingClientRect();
-                    const sectionRect = sectionRight.getBoundingClientRect();
-                    const scrollPosition = storeRect.top - sectionRect.top + sectionRight.scrollTop;
-                    sectionRight.scrollTop = scrollPosition;
+                if (sectionRight) {
+                    sectionRight.scrollTop -= pixels;
                 }
-            });
-            console.log('Loja movida para cima');
+            }, PIXELS_POR_MOVIMENTO);
+            console.log(`Loja movida ${PIXELS_POR_MOVIMENTO} pixels para cima`);
         }
     } catch (err) {
         console.error('Erro ao controlar loja:', err);
