@@ -243,6 +243,21 @@ async function processarGift(giftId) {
     }
 }
 
+// Função para lidar com erros e fazer backup
+async function handleError(err) {
+    console.error('Erro detectado:', err);
+    try {
+        // Tenta fazer backup antes de fechar
+        await fazerBackup();
+        console.log('Backup realizado com sucesso após erro');
+    } catch (backupErr) {
+        console.error('Erro ao tentar fazer backup após erro:', backupErr);
+    }
+    
+    // Tenta fechar os recursos
+    await limparRecursos();
+}
+
 // Função para inicializar o navegador
 async function inicializarNavegador() {
     try {
@@ -256,6 +271,12 @@ async function inicializarNavegador() {
                 '--disable-setuid-sandbox',
                 '--no-sandbox'
             ]
+        });
+        
+        // Adiciona tratamento de erro para o browser
+        browser.on('disconnected', async () => {
+            console.log('Browser desconectado inesperadamente');
+            await handleError(new Error('Browser desconectado'));
         });
         
         page = await browser.newPage();
@@ -342,7 +363,7 @@ async function inicializarNavegador() {
         }
         
     } catch (err) {
-        console.error('Erro ao inicializar navegador:', err);
+        await handleError(err);
         throw err;
     }
 }
@@ -418,13 +439,13 @@ async function limparRecursos() {
 // Tratamento de sinais do sistema
 process.on('SIGINT', async () => {
     console.log('Encerrando o programa...');
-    await limparRecursos();
+    await handleError(new Error('Programa encerrado pelo usuário'));
     process.exit();
 });
 
 process.on('uncaughtException', async (err) => {
     console.error('Erro não tratado:', err);
-    await limparRecursos();
+    await handleError(err);
     process.exit(1);
 });
 
